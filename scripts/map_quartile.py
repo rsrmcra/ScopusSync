@@ -1,13 +1,21 @@
 from datetime import datetime
 import json
 import os
+import sys
 import pandas as pd
 from supabase import Client, create_client
 
 # นำเข้าฟังก์ชันจัดการโฟลเดอร์และตั้งชื่อไฟล์ตามมาตรฐานใหม่
 from file_organizer import get_formatted_filename, get_target_dir
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# กำหนด Path ของ config ให้รองรับทั้ง Python Script และ .exe
+if getattr(sys, 'frozen', False):
+    # ถ้าโปรแกรมถูกคอมไพล์เป็น .exe ให้มองหาโฟลเดอร์ config ที่อยู่ "ข้างๆ" ไฟล์ .exe
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # ถ้าเป็นการรันโค้ด Python ปกติ ให้ใช้โครงสร้างโฟลเดอร์เดิม
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "settings.json")
 
 
