@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from version import APP_VERSION
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "scripts"))
@@ -16,7 +17,8 @@ from auto_sync_metrics import download_and_sync_metrics
 class ScopusSyncApp(ttk.Window):
   def __init__(self):
     super(ScopusSyncApp, self).__init__(themename="litera")
-    self.title("Scopus Sync - Research Data Pipeline")
+    # เปลี่ยนมาเรียกใช้ APP_VERSION เพื่อให้แสดงเลขเวอร์ชันที่หัวข้อโปรแกรม
+    self.title(f"Scopus Sync - Research Data Pipeline ({APP_VERSION})")
     self.geometry("950x730")
     self.minsize(850, 600)
 
