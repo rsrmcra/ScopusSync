@@ -1,0 +1,6 @@
+build/
+dist/
+*.spec
+config/settings.json
+sync_state.json
+__pycache__/
