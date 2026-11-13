@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 import os
+import sys
 import time
 import pandas as pd
 import requests
@@ -8,10 +9,15 @@ import requests
 # นำเข้าฟังก์ชันจัดการโฟลเดอร์และตั้งชื่อไฟล์ตามมาตรฐานใหม่
 from file_organizer import get_formatted_filename, get_target_dir
 
-# โหลดค่าคอนฟิกจาก config/settings.json ตามระบบปัจจุบันของคุณ
-CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "config", "settings.json"
-)
+# กำหนด Path ของ config ให้รองรับทั้ง Python Script และ .exe
+if getattr(sys, 'frozen', False):
+    # ถ้าเป็นไฟล์ .exe ให้มองหาโฟลเดอร์ config ที่อยู่ "ข้างๆ" ไฟล์ .exe
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # ถ้าเป็นการรันโค้ด Python ปกติ ให้ถอยจาก scripts ไป 1 ชั้น
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "settings.json")
 
 
 def load_config():
@@ -27,7 +33,6 @@ API_KEY = config.get("api_key")
 if not API_KEY or API_KEY == "YOUR_SCOPUS_API_KEY_HERE":
     raise ValueError("กรุณาระบุ Scopus API Key ที่ถูกต้องในไฟล์ config/settings.json")
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MASTER_5Y_DIR = os.path.join(BASE_DIR, "data", "master_5_years")
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -316,12 +321,10 @@ def parse_authors_with_affiliations(detail):
             continue
         affs = auid_to_affils.get(auid, [])
         if affs:
-            # เปลี่ยนจากใช้ '; ' มาเป็น ', ' เพื่อเชื่อมแต่ละสังกัดของผู้วิจัยคนเดียวกัน
             results.append(f"{indexed_name}, {', '.join(affs)}")
         else:
             results.append(indexed_name)
     
-    # ใช้ '; ' คั่นเฉพาะรอยต่อระหว่างผู้วิจัยแต่ละคนตามที่คุณต้องการ
     return "; ".join(results)
 
 
@@ -531,7 +534,6 @@ def save_to_master_5_years(df_new):
 
 
 def save_yearly_raw(df, year):
-    """บันทึกไฟล์ Raw แยกตามโฟลเดอร์ย่อยรายปี และใช้ชื่อมาตรฐานใหม่"""
     sub_dir = get_target_dir("yearly_raw", year)
     filename = get_formatted_filename("scopus_raw", year)
     filepath = os.path.join(sub_dir, filename)
@@ -540,7 +542,6 @@ def save_yearly_raw(df, year):
 
 
 def save_periodic_pull(df, year):
-    """บันทึกไฟล์ Periodic Pull แยกตามโฟลเดอร์ย่อยรายปี และใช้ชื่อมาตรฐานใหม่"""
     sub_dir = get_target_dir("periodic_pulls", year)
     filename = get_formatted_filename("periodic_pull", year)
     filepath = os.path.join(sub_dir, filename)
@@ -590,14 +591,8 @@ def main(log_callback=print):
 
         if all_rows:
             df = pd.DataFrame(all_rows)
-            
-            # 1. บันทึกไฟล์ดิบรายปีลงโฟลเดอร์ย่อยตามปี พร้อมชื่อมาตรฐานใหม่
             save_yearly_raw(df, year)
-            
-            # 2. บันทึกไฟล์ Snapshot ประจำรอบลงโฟลเดอร์ย่อยตามปี พร้อมชื่อมาตรฐานใหม่
             save_periodic_pull(df, year)
-            
-            # 3. บันทึกและสะสมลง Master 5 ปี
             save_to_master_5_years(df)
         else:
             log(f"No records found for {year}")
