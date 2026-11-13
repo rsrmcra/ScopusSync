@@ -8,8 +8,10 @@ from tkinter import messagebox, scrolledtext
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from version import APP_VERSION
-
+import requests
+import subprocess
 import sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "scripts"))
 from run_pipeline import run_full_pipeline
 from auto_sync_metrics import download_and_sync_metrics
@@ -17,7 +19,6 @@ from auto_sync_metrics import download_and_sync_metrics
 class ScopusSyncApp(ttk.Window):
   def __init__(self):
     super(ScopusSyncApp, self).__init__(themename="litera")
-    # เปลี่ยนมาเรียกใช้ APP_VERSION เพื่อให้แสดงเลขเวอร์ชันที่หัวข้อโปรแกรม
     self.title(f"Scopus Sync - Research Data Pipeline ({APP_VERSION})")
     self.geometry("950x730")
     self.minsize(850, 600)
@@ -30,6 +31,36 @@ class ScopusSyncApp(ttk.Window):
     
     # เริ่มต้นระบบนาฬิกาและ Countdown เรียลไทม์
     self.update_clock_and_countdown()
+
+    # --- เพิ่มระบบตรวจสอบและอัปเดตอัตโนมัติเมื่อเปิดโปรแกรม ---
+    self.check_and_auto_update()
+
+  def check_and_auto_update(self):
+    """ฟังก์ชันเช็คอัปเดตจาก GitHub Releases และสั่งรัน updater.exe หากมีเวอร์ชันใหม่"""
+    def _run_update():
+      try:
+        repo_url = "https://api.github.com/repos/rsnmcra/ScopusSync/releases/latest"
+        response = requests.get(repo_url, timeout=3)
+        if response.status_code == 200:
+          latest_data = response.json()
+          latest_version = latest_data.get("tag_name")
+          
+          if latest_version and latest_version != APP_VERSION:
+            assets = latest_data.get("assets", [])
+            download_url = next((asset["browser_download_url"] for asset in assets if asset["name"].endswith(".exe")), None)
+            
+            if download_url:
+              current_exe = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
+              updater_path = os.path.join(os.path.dirname(current_exe), "updater.exe")
+              
+              if os.path.exists(updater_path):
+                self.write_log(f"INFO: Found new version {latest_version}. Updating automatically...")
+                subprocess.Popen([updater_path, current_exe, download_url])
+                sys.exit()
+      except Exception:
+        pass # ข้ามหากไม่มีอินเทอร์เน็ตหรือติดปัญหาการเชื่อมต่อ
+
+    threading.Thread(target=_run_update, daemon=True).start()
 
   def create_widgets(self):
     header_frame = ttk.Frame(self, padding=20)
@@ -126,7 +157,6 @@ class ScopusSyncApp(ttk.Window):
     # หาวันสิ้นเดือนของรอบปัจจุบัน (เป้าหมาย 14:00:00)
     target_date = self.get_last_day_of_current_month(now)
     if now > target_date:
-        # หากเลยเวลา 14:00 ของวันสิ้นเดือนนี้ไปแล้ว ให้ขยับเป้าหมายไปเป็นวันสิ้นเดือนของเดือนถัดไป
         next_month = now.replace(day=1) + timedelta(days=32)
         target_date = self.get_last_day_of_current_month(next_month)
 
@@ -135,19 +165,16 @@ class ScopusSyncApp(ttk.Window):
     hours, remainder = divmod(remaining.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 
-    # อัปเดตข้อความบนหน้าจอ GUI แสดงเวลาเป้าหมาย 14:00:00
     self.time_label.config(text=f"Current Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
     self.countdown_label.config(
         text=f"Target Auto-Sync ({target_date.strftime('%Y-%m-%d %H:%M:%S')}): "
              f"Remaining {days} Days {hours} Hours {minutes} Minutes {seconds} Seconds"
     )
 
-    # เงื่อนไขตรวจสอบการทำ Auto-Sync: รันอัตโนมัติเมื่อถึงวันสิ้นเดือน เวลา 14:00 น. ตรง
     if now.day == calendar.monthrange(now.year, now.month)[1] and now.hour == 14 and now.minute == 0 and not self.is_running:
         self.write_log(f"INFO: [{now.strftime('%Y-%m-%d %H:%M:%S' )}] Auto-sync triggered at 14:00 for the end of the month.")
         self.start_pipeline_thread()
 
-    # วนลูปเรียกตัวเองซ้ำทุกๆ 1 วินาที (Real-time)
     self.after(1000, self.update_clock_and_countdown)
 
   def write_log(self, message):
